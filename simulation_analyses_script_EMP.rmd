@@ -1,0 +1,111 @@
+---
+title: "Simulation Analyses for EMP Population"
+output: html_document
+---
+
+```{r}
+library("qtl")
+library("rmarkdown")
+```
+
+
+##Read matrix of all simulated data
+```{r}
+allSims <- read.table(file = "/Users/hia5y7/Desktop/R/Simulations/EMP/EMPandAdditive4_Add_QTN_4_Epi_QTN_h.2_0.2_add.eff_0.6_epis.eff_0.6_reps_100/Simulated.Data.100.Reps.Herit.0.2.txt",header=T,stringsAsFactors=F)
+```
+
+##Read genotypes
+```{r}
+genos <- read.csv("/Users/hia5y7/Desktop/R/Simulations/EMP/Idealized_EMP_genos.csv", header = T, stringsAsFactors=F, na.strings=c("-","NA"))[1:192,]
+genos <- genos[which(genos[2,] != ".")]
+genos[3:nrow(genos),2:ncol(genos)] <- as.numeric(unlist(genos[3:nrow(genos),2:ncol(genos)]))
+```
+
+##Create Matrices for data to be inserted in to
+```{r}
+setwd("/Users/hia5y7/Desktop/R/Simulations/EMP/EMPandAdditive4_Add_QTN_4_Epi_QTN_h.2_0.2_add.eff_0.6_epis.eff_0.6_reps_100/")
+sigs <- read.table(file = "Genotypic.information.for.4.Additive.QTN.txt",stringsAsFactors=F,header=T,sep = "\t")[,1]
+twosigs <- read.table(file = "Genotypic.information.for.4.Epistatic.QTN.txt",stringsAsFactors=F,header=T, sep = "\t")[,1]
+results <- matrix(NA,nrow=100,ncol=5)
+tworesults <- matrix(NA, nrow = 9, ncol = 100)
+rownames(tworesults) <- c("threshold",twosigs)
+```
+
+##Loop over analysis
+###Composite Interval Mapping (Additive search)
+```{r include=FALSE}
+setwd("/Users/hia5y7/Desktop/R/Simulations/EMP/EMPandAdditive4_Add_QTN_4_Epi_QTN_h.2_0.2_add.eff_0.6_epis.eff_0.6_reps_100/")
+for(i in 2:ncol(allSims)){
+
+  genos.tmp <- genos
+  genos.tmp[,1] <- c("","",allSims[,i])
+  write.csv(genos.tmp,file=paste(i-1,".genos.tmp.csv"),row.names=F,quote=F)
+  
+  
+  sim <- read.cross(format = "csv", ".", file=paste(i-1,".genos.tmp.csv"), na.strings=c("-","NA"), genotypes = c(0,0.5,1))
+  
+  sim2 <- jittermap(sim, 1e-6)
+  
+  sim3 <- convert2riself(sim2)
+  
+  sim4 <- calc.genoprob(sim3)
+  
+  CIM <- cim(sim4, n.marcov = 6, window = 10, method = "hk")
+  
+  CIMperms <- cim(sim4, n.marcov = 6, window= 10, method = "hk", n.perm = 100)
+  
+  thresh <- summary(CIMperms)[1,1]
+  
+  lod <- as.matrix(CIM$lod)
+  rownames(lod) <- colnames(genos)[2:ncol(genos)]
+  first<- c(thresh,lod[rownames = sigs,])
+  results[i-1,1:5] <- first
+}
+```
+###Scantwo (epistatic search)
+```{r include =FALSE}
+f <- function(foo) {
+    foo[upper.tri(foo)] <- t(foo)[upper.tri(foo)]
+    foo}
+setwd("/Users/hia5y7/Desktop/R/Simulations/EMP/EMPandAdditive4_Add_QTN_4_Epi_QTN_h.2_0.2_add.eff_0.6_epis.eff_0.6_reps_100/")
+for(i in 1:100){
+  
+  sim <- read.cross(format = "csv", ".", file=paste(i,".genos.tmp.csv"),
+                    na.strings=c("-","NA"), genotypes = c(0,0.5,1))
+  sim <- jittermap(sim, 1e-6)
+  sim <- convert2riself(sim)
+  sim <- calc.genoprob(sim)
+  
+  scantwo <- scantwo(sim, chr = c(1,2,3,4,5,6,7,8,9,10), pheno.col = 1, model = "normal", method = "hk", addcovar = NULL, intcovar = NULL, weights = NULL, use = "all.obs")
+  
+  scantwoperms <- scantwo(sim, chr = c(1,2,3,4,5,6,7,8,9,10), pheno.col = 1, model = "normal", method = "hk", addcovar = NULL, intcovar = NULL, weights = NULL, use = "all.obs", n.perm = 100)
+  
+  scantwosum <- summary(scantwo, perm = scantwoperms, alpha = 0.05)
+  twothresh <- summary(scantwoperms)[[1]][1]
+  
+  foo <- matrix(scantwo$lod, nrow = 1339, ncol = 1339)
+  foo <- f(foo)
+  rownames(foo) <- rownames(CIM)
+  colnames(foo) <- rownames(CIM)
+  
+  int1x2 <- foo[rownames = twosigs[1],colnames = twosigs[2]]
+  
+  int3x4 <- foo[rownames = twosigs[3],colnames = twosigs[4]]
+  
+  int5x6 <- foo[rownames = twosigs[5],colnames = twosigs[6]]
+  
+  int7x8 <- foo[rownames = twosigs[7],colnames = twosigs[8]]
+  
+  twocols <- rbind(twothresh,int1x2,"",int3x4,"",int5x6,"",int7x8,"") 
+  
+  tworesults[,i] <- twocols
+}
+```
+
+##Export results to csv files
+```{r}
+  setwd("/Users/hia5y7/Desktop/R/Simulations/EMP/EMPandAdditive4_Add_QTN_4_Epi_QTN_h.2_0.2_add.eff_0.6_epis.eff_0.6_reps_100/")
+write.csv(tworesults, file = paste("results.epistatic.0.2.csv"))
+
+write.csv(results, file = paste("results.additive.0.2.csv"))
+```

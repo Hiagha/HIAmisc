@@ -1,0 +1,77 @@
+---
+title: "Simulation Analyses 01"
+output: html_document
+---
+
+```{r}
+library("qtl")
+library("rmarkdown")
+```
+
+##Read matrix of all simulated data
+```{r}
+allSims <- read.table(file = "all_sim_data/simulation_analyses_0.1/simulation_data/Simulated.Data.100.Reps.Herit.0.1.txt",header=T,stringsAsFactors=F)
+```
+
+##Read genotypes
+```{r}
+genos <- read.csv("all_sim_data/IBM_sample_final1.csv",header=T,stringsAsFactors=F,na.strings=c("-","NA"))
+```
+
+##Create Matrices for data to be inserted in to
+```{r}
+setwd("all_sim_data/simulation_analyses_0.1")
+twosigs <- read.table(file = "simulation_data/Genotypic.information.for.10.Epistatic.QTN.txt",stringsAsFactors=F,header=T, sep = "\t")[,1]
+tworesults <- matrix(NA, nrow = length(twosigs)+1, ncol = 100)
+rownames(tworesults) <- c("threshold",twosigs)
+```
+
+##Loop over analysis
+
+###Scantwo (epistatic search)
+```{r}
+f <- function(foo) {
+    foo[upper.tri(foo)] <- t(foo)[upper.tri(foo)]
+    foo}
+setwd("all_sim_data/simulation_analyses_0.1")
+
+for(i in 2:ncol(allSims)){
+  genos.tmp <- genos
+  genos.tmp[,1] <- c("","",allSims[,i])
+  write.csv(genos.tmp,file=paste(i-1,".genos.tmp.csv"),row.names=F,quote=F)}
+
+for(i in 1:100){
+  
+  sim <- read.cross(format = "csv", ".", file=paste(i,".genos.tmp.csv"),
+                    na.strings=c("-","NA"), genotypes = c("A","B"))
+  sim <- jittermap(sim, 1e-6)
+  sim <- convert2riself(sim)
+  sim <- calc.genoprob(sim)
+  
+  scantwo <- scantwo(sim, chr = c(1,2,3,4,5,6,7,8,9,10), pheno.col = 1, model = "normal", method = "hk", addcovar = NULL, intcovar = NULL, weights = NULL, use = "all.obs")
+  
+  scantwoperms <- scantwo(sim, chr = c(1,2,3,4,5,6,7,8,9,10), pheno.col = 1, model = "normal", method = "hk", addcovar = NULL, intcovar = NULL, weights = NULL, use = "all.obs", n.perm = 100)
+  
+  scantwosum <- summary(scantwo, perm = scantwoperms, alpha = 0.05)
+  twothresh <- summary(scantwoperms)[[1]][1]
+  
+  foo <- matrix(scantwo$lod, nrow = 1339, ncol = 1339)
+  foo <- f(foo)
+  rownames(foo) <- colnames(genos[2:ncol(genos)])
+  colnames(foo) <- colnames(genos[2:ncol(genos)])
+  
+  tworesults[1,i] <- twothresh
+  
+  for(j in 1:(length(twosigs))){
+    if(!j %% 2){
+      next
+    }
+  tworesults[j+1,i] <- foo[rownames = twosigs[j],colnames = twosigs[j+1]]
+}}
+```
+
+##Export results to csv files
+```{r}
+  setwd("all_sim_data/results")
+write.csv(tworesults, file = paste("results.epistatic.0.1.csv"))
+```
