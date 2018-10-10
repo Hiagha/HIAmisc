@@ -1,5 +1,5 @@
 ---
-title: "Simulation Analyses for IBM population"
+title: "Simulation Analyses"
 output: html_document
 ---
 
