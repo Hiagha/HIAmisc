@@ -1,5 +1,5 @@
 ---
-title: "Simulation Analyses"
+title: "Simulation Analysis"
 output: html_document
 ---
 
